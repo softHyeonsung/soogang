@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>수강신청 - 대시보드</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* ── Layout: 상단 강좌 목록 + 하단 고정 내 수강목록 ── */
+    body.app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .dashboard-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 1.5rem;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      box-sizing: border-box;
+    }
+
+    /* ── 강좌 목록 (스크롤 가능 영역) ── */
+    .courses-area {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    /* ── 강좌 한 줄 테이블 ── */
+    .course-table-wrap {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .course-table-wrap table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 1rem;
+    }
+
+    .course-table-wrap th {
+      background: #f1f5f9;
+      padding: 1rem 1.25rem;
+      text-align: left;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .course-table-wrap td {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 1rem;
+      vertical-align: middle;
+    }
+
+    .course-table-wrap tr:last-child td { border-bottom: none; }
+    .course-table-wrap tr:hover td { background: #f8fafc; }
+    .course-table-wrap tr.enrolled td { background: #f0fdf4; }
+    .course-table-wrap tr.enrolled:hover td { background: #dcfce7; }
+
+    .course-name-cell { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+    .course-desc-cell { font-size: .9rem; color: var(--text-muted); margin-top: .2rem; }
+
+    .cap-wrap { min-width: 130px; }
+    .cap-bar { height: 6px; background: var(--border); border-radius: 99px; margin-bottom: .3rem; }
+    .cap-fill { height: 100%; border-radius: 99px; background: var(--primary); }
+    .cap-fill.full { background: var(--danger); }
+    .cap-text { font-size: .9rem; color: var(--text-muted); white-space: nowrap; }
+
+    .action-cell { width: 120px; }
+    .action-cell .btn { width: 110px; font-size: .95rem; padding: .55rem .8rem; }
+
+    /* ── 하단 고정 내 수강목록 ── */
+    .my-panel {
+      flex-shrink: 0;
+      margin-top: 1rem;
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-md);
+      border: 1.5px solid var(--primary);
+    }
+
+    .my-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .9rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .my-panel-header h3 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .my-panel-toggle {
+      font-size: .85rem;
+      color: var(--text-muted);
+    }
+
+    .my-panel-body {
+      overflow-y: auto;
+      max-height: 220px;
+    }
+
+    .my-panel-body table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 1rem;
+    }
+
+    .my-panel-body th {
+      background: #f8fafc;
+      padding: .75rem 1.25rem;
+      text-align: left;
+      font-size: .95rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+    }
+
+    .my-panel-body td {
+      padding: .8rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 1rem;
+    }
+
+    .my-panel-body tr:last-child td { border-bottom: none; }
+    .my-panel-empty { padding: 1.2rem 1.25rem; color: var(--text-muted); font-size: .95rem; }
+
+    /* ── 상단 헤더 ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .section-header h2 { font-size: 1.4rem; font-weight: 800; }
+    .section-header p { font-size: .95rem; color: var(--text-muted); margin-top: .15rem; }
+
+    .enrolled-badge {
+      display: inline-block;
+      padding: .15rem .6rem;
+      background: var(--success-light);
+      color: var(--success);
+      border-radius: 99px;
+      font-size: .8rem;
+      font-weight: 700;
+      margin-left: .5rem;
+    }
+  </style>
+</head>
+<body class="app">
+  <nav class="navbar">
+    <span class="navbar-brand">수강신청 시스템</span>
+    <div class="navbar-user">
+      <span id="userName"></span>
+      <span class="badge">학생</span>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">로그아웃</button>
+    </div>
+  </nav>
+
+  <div class="dashboard-body">
+    <!-- 강좌 목록 -->
+    <div class="section-header">
+      <div>
+        <h2>수강신청</h2>
+        <p>원하는 강좌를 신청하세요</p>
+      </div>
+    </div>
+
+    <div class="courses-area">
+      <div class="course-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:30%">강좌명</th>
+              <th style="width:13%">담당교수</th>
+              <th style="width:18%">강의시간</th>
+              <th style="width:20%">수강인원</th>
+              <th style="width:19%" class="action-cell">신청</th>
+            </tr>
+          </thead>
+          <tbody id="courseBody">
+            <tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 내 수강목록 (하단 고정) -->
+    <div class="my-panel">
+      <div class="my-panel-header" onclick="toggleMyPanel()">
+        <h3>내 수강 목록 <span id="myCount" class="enrolled-badge">0</span></h3>
+        <span class="my-panel-toggle" id="panelToggleIcon">▲ 접기</span>
+      </div>
+      <div class="my-panel-body" id="myPanelBody">
+        <div class="my-panel-empty">신청한 강좌가 없습니다.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let panelOpen = true;
+
+    async function init() {
+      const res = await fetch('/api/me');
+      if (!res.ok) { window.location.href = '/'; return; }
+      const user = await res.json();
+      if (user.role === 'admin') { window.location.href = '/admin.html'; return; }
+      document.getElementById('userName').textContent = user.name + '님';
+      loadCourses();
+      loadMyList();
+    }
+
+    async function loadCourses() {
+      const res = await fetch('/api/courses');
+      const courses = await res.json();
+      const tbody = document.getElementById('courseBody');
+
+      if (!courses.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-muted);font-size:1rem">등록된 강좌가 없습니다.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = courses.map(c => {
+        const pct = Math.min(100, Math.round((c.enrolled_count / c.capacity) * 100));
+        const full = c.enrolled_count >= c.capacity;
+        const enrolled = c.is_enrolled > 0;
+        const btn = enrolled
+          ? `<button class="btn btn-outline" data-id="${c.id}" onclick="unenroll(${c.id})">수강 취소</button>`
+          : full
+            ? `<button class="btn btn-ghost" disabled>정원 마감</button>`
+            : `<button class="btn btn-primary" data-id="${c.id}" onclick="enroll(${c.id})">수강 신청</button>`;
+        return `<tr class="${enrolled ? 'enrolled' : ''}">
+          <td class="wrap">
+            <div class="course-name-cell">${esc(c.name)}</div>
+            ${c.description ? `<div class="course-desc-cell">${esc(c.description)}</div>` : ''}
+          </td>
+          <td style="font-size:1rem">${esc(c.instructor || '-')}</td>
+          <td style="font-size:1rem">${c.days && c.start_time ? `${esc(c.days)} ${esc(c.start_time)}~${esc(c.end_time)}` : esc(c.schedule || '-')}</td>
+          <td class="cap-wrap">
+            <div class="cap-bar"><div class="cap-fill ${full ? 'full' : ''}" style="width:${pct}%"></div></div>
+            <span class="cap-text">${c.enrolled_count} / ${c.capacity} 명</span>
+          </td>
+          <td class="action-cell">${btn}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function loadMyList() {
+      const res = await fetch('/api/my-enrollments');
+      const list = await res.json();
+      const el = document.getElementById('myPanelBody');
+      document.getElementById('myCount').textContent = list.length;
+
+      if (!list.length) {
+        el.innerHTML = '<div class="my-panel-empty">신청한 강좌가 없습니다.</div>';
+        return;
+      }
+
+      el.innerHTML = `<table>
+        <thead><tr>
+          <th style="width:35%">강좌명</th>
+          <th style="width:20%">담당교수</th>
+          <th style="width:25%">강의시간</th>
+          <th style="width:20%">신청일</th>
+        </tr></thead>
+        <tbody>${list.map(c => `<tr>
+          <td><strong>${esc(c.name)}</strong></td>
+          <td>${esc(c.instructor || '-')}</td>
+          <td>${esc(c.schedule || '-')}</td>
+          <td>${fmtDate(c.enrolled_at)}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+
+    function toggleMyPanel() {
+      panelOpen = !panelOpen;
+      document.getElementById('myPanelBody').style.display = panelOpen ? '' : 'none';
+      document.getElementById('panelToggleIcon').textContent = panelOpen ? '▼ 접기' : '▲ 펼치기';
+    }
+
+    async function enroll(id) {
+      const res = await fetch(`/api/courses/${id}/enroll`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error, 'error'); return; }
+      showToast('수강 신청되었습니다!', 'success');
+      loadCourses(); loadMyList();
+    }
+
+    async function unenroll(id) {
+      if (!confirm('수강 신청을 취소하시겠습니까?')) return;
+      const res = await fetch(`/api/courses/${id}/enroll`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error, 'error'); return; }
+      showToast('수강이 취소되었습니다.', 'success');
+      loadCourses(); loadMyList();
+    }
+
+    async function logout() {
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/';
+    }
+
+    function esc(str) {
+      return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function fmtDate(d) {
+      return d ? new Date(d).toLocaleDateString('ko-KR') : '-';
+    }
+    function showToast(msg, type = '') {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.className = 'toast show' + (type ? ' ' + type : '');
+      setTimeout(() => t.className = 'toast', 2500);
+    }
+
+    init();
+  </script>
+</body>
+</html>

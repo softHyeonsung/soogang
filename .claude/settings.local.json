@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(/c/Program Files/nodejs/npm.cmd install:*)"
+    ]
+  }
+}

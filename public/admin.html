@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>수강신청 - 관리자</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="app">
+  <nav class="navbar">
+    <span class="navbar-brand">수강신청 시스템</span>
+    <div class="navbar-user">
+      <span id="adminName"></span>
+      <span class="badge badge-admin">관리자</span>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">로그아웃</button>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="page-header">
+      <h2>관리자 패널</h2>
+      <p>강좌 및 회원을 관리합니다</p>
+    </div>
+
+    <div class="admin-tabs">
+      <button class="admin-tab active" onclick="switchTab('courses')">강좌 관리</button>
+      <button class="admin-tab" onclick="switchTab('users')">회원 관리</button>
+    </div>
+
+    <!-- Courses Tab -->
+    <div id="tabCourses">
+      <div class="flex items-center justify-between mb-2">
+        <span style="font-weight:700;font-size:.95rem;white-space:nowrap" id="courseCount"></span>
+        <button class="btn btn-primary" onclick="openCourseModal()" style="padding:.35rem .75rem;font-size:.82rem;width:auto;white-space:nowrap;flex-shrink:0">+ 추가</button>
+      </div>
+      <div id="courseTable"></div>
+    </div>
+
+    <!-- Users Tab -->
+    <div id="tabUsers" style="display:none">
+      <div class="mb-2" style="font-weight:700;font-size:.95rem" id="userCount"></div>
+      <div id="userTable"></div>
+    </div>
+  </div>
+
+  <!-- Course Modal -->
+  <div class="modal-overlay" id="courseModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="courseModalTitle">강좌 추가</h3>
+        <button class="modal-close" onclick="closeModal('courseModal')">×</button>
+      </div>
+      <div id="courseModalError" class="error-msg"></div>
+      <div class="form-group">
+        <label>강좌명 *</label>
+        <input type="text" id="cName" placeholder="예: 데이터구조론">
+      </div>
+      <div class="form-group">
+        <label>담당 교수</label>
+        <input type="text" id="cInstructor" placeholder="예: 김교수">
+      </div>
+      <div class="form-group">
+        <label>요일</label>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.25rem">
+          <label class="day-btn"><input type="checkbox" value="월"> 월</label>
+          <label class="day-btn"><input type="checkbox" value="화"> 화</label>
+          <label class="day-btn"><input type="checkbox" value="수"> 수</label>
+          <label class="day-btn"><input type="checkbox" value="목"> 목</label>
+          <label class="day-btn"><input type="checkbox" value="금"> 금</label>
+          <label class="day-btn"><input type="checkbox" value="토"> 토</label>
+          <label class="day-btn"><input type="checkbox" value="일"> 일</label>
+        </div>
+      </div>
+      <div class="form-group" style="display:flex;gap:.75rem">
+        <div style="flex:1">
+          <label>시작시간</label>
+          <input type="time" id="cStartTime" step="300" style="width:100%;padding:.6rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem">
+        </div>
+        <div style="flex:1">
+          <label>종료시간</label>
+          <input type="time" id="cEndTime" step="300" style="width:100%;padding:.6rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>강의실 / 비고</label>
+        <input type="text" id="cSchedule" placeholder="예: 공학관 301호">
+      </div>
+      <div class="form-group">
+        <label>정원 *</label>
+        <input type="number" id="cCapacity" placeholder="30" min="1">
+      </div>
+      <div class="form-group">
+        <label>강좌 설명</label>
+        <textarea id="cDesc" rows="3" placeholder="강좌에 대한 설명을 입력하세요"></textarea>
+      </div>
+      <div class="modal-footer" style="display:flex;gap:.75rem">
+        <button class="btn btn-ghost" onclick="closeModal('courseModal')" style="flex:1;border:1.5px solid var(--border)">취소</button>
+        <button class="btn btn-primary" onclick="saveCourse()" id="saveCourseBtn" style="flex:1">추가</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enrollment Modal -->
+  <div class="modal-overlay" id="enrollModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="enrollModalTitle">수강 신청자 목록</h3>
+        <button class="modal-close" onclick="closeModal('enrollModal')">×</button>
+      </div>
+      <div id="enrollList"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let editingCourseId = null;
+
+    async function init() {
+      const res = await fetch('/api/me');
+      if (!res.ok) { window.location.href = '/'; return; }
+      const user = await res.json();
+      if (user.role !== 'admin') { window.location.href = '/dashboard.html'; return; }
+      document.getElementById('adminName').textContent = user.name + '님';
+      loadCourses();
+    }
+
+    function switchTab(tab) {
+      document.getElementById('tabCourses').style.display = tab === 'courses' ? '' : 'none';
+      document.getElementById('tabUsers').style.display = tab === 'users' ? '' : 'none';
+      document.querySelectorAll('.admin-tab').forEach((b, i) =>
+        b.classList.toggle('active', (i === 0 && tab === 'courses') || (i === 1 && tab === 'users'))
+      );
+      if (tab === 'courses') loadCourses(); else loadUsers();
+    }
+
+    // ── Courses ──────────────────────────────────────────────────────────────
+    async function loadCourses() {
+      const res = await fetch('/api/admin/courses');
+      const courses = await res.json();
+      document.getElementById('courseCount').textContent = `전체 강좌 ${courses.length}개`;
+
+      const el = document.getElementById('courseTable');
+      if (!courses.length) {
+        el.innerHTML = '<div class="empty"><div class="empty-icon">📚</div><p>등록된 강좌가 없습니다.</p></div>';
+        return;
+      }
+
+      el.innerHTML = `<div class="table-wrap"><table>
+        <thead><tr>
+          <th style="width:28%">강좌명</th>
+          <th style="width:13%">담당교수</th>
+          <th style="width:17%">강의시간</th>
+          <th style="width:18%">수강인원</th>
+          <th style="width:10%">신청자</th>
+          <th style="width:14%">관리</th>
+        </tr></thead>
+        <tbody>${courses.map(c => {
+          const pct = Math.min(100, Math.round((c.enrolled_count / c.capacity) * 100));
+          const full = c.enrolled_count >= c.capacity;
+          return `<tr>
+            <td class="wrap">
+              <div style="font-size:1rem;font-weight:700">${esc(c.name)}</div>
+              ${c.description ? `<div style="font-size:.85rem;color:var(--text-muted);margin-top:.15rem">${esc(c.description.substring(0,50))}${c.description.length>50?'…':''}</div>` : ''}
+            </td>
+            <td style="font-size:1rem">${esc(c.instructor || '-')}</td>
+            <td style="font-size:1rem">${c.days && c.start_time ? `${esc(c.days)} ${esc(c.start_time)}~${esc(c.end_time)}` : esc(c.schedule || '-')}</td>
+            <td>
+              <div style="height:6px;background:var(--border);border-radius:99px;margin-bottom:.3rem">
+                <div style="height:100%;width:${pct}%;border-radius:99px;background:${full ? 'var(--danger)' : 'var(--primary)'}"></div>
+              </div>
+              <span style="font-size:.9rem;color:var(--text-muted)">${c.enrolled_count} / ${c.capacity} 명</span>
+            </td>
+            <td>
+              <button class="btn btn-outline btn-sm js-show-enrollments" data-id="${c.id}" data-name="${esc(c.name)}">${c.enrolled_count}명 보기</button>
+            </td>
+            <td>
+              <div class="flex gap-2">
+                <button class="btn btn-warning btn-sm js-edit-course" data-id="${c.id}">수정</button>
+                <button class="btn btn-danger btn-sm js-delete-course" data-id="${c.id}" data-name="${esc(c.name)}">삭제</button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`;
+    }
+
+    function openCourseModal(course = null) {
+      editingCourseId = course ? course.id : null;
+      document.getElementById('courseModalTitle').textContent = course ? '강좌 수정' : '강좌 추가';
+      document.getElementById('saveCourseBtn').textContent = course ? '수정' : '추가';
+      document.getElementById('cName').value = course?.name || '';
+      document.getElementById('cInstructor').value = course?.instructor || '';
+      document.getElementById('cSchedule').value = course?.schedule || '';
+      document.getElementById('cStartTime').value = course?.start_time || '';
+      document.getElementById('cEndTime').value = course?.end_time || '';
+      document.getElementById('cCapacity').value = course?.capacity || '';
+      document.getElementById('cDesc').value = course?.description || '';
+      // Set day checkboxes
+      const selectedDays = [...(course?.days || '')];
+      document.querySelectorAll('.day-btn input').forEach(cb => {
+        cb.checked = selectedDays.includes(cb.value);
+      });
+      document.getElementById('courseModalError').style.display = 'none';
+      openModal('courseModal');
+    }
+
+    async function editCourse(id) {
+      const res = await fetch('/api/admin/courses');
+      const courses = await res.json();
+      const c = courses.find(x => x.id === id);
+      if (c) openCourseModal(c);
+    }
+
+    async function saveCourse() {
+      const days = [...document.querySelectorAll('.day-btn input:checked')].map(cb => cb.value).join('');
+      const body = {
+        name: document.getElementById('cName').value.trim(),
+        instructor: document.getElementById('cInstructor').value.trim(),
+        schedule: document.getElementById('cSchedule').value.trim(),
+        days,
+        start_time: document.getElementById('cStartTime').value,
+        end_time: document.getElementById('cEndTime').value,
+        capacity: parseInt(document.getElementById('cCapacity').value),
+        description: document.getElementById('cDesc').value.trim()
+      };
+      const errEl = document.getElementById('courseModalError');
+      errEl.style.display = 'none';
+
+      const url = editingCourseId ? `/api/admin/courses/${editingCourseId}` : '/api/admin/courses';
+      const method = editingCourseId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json();
+
+      if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+      closeModal('courseModal');
+      showToast(editingCourseId ? '강좌가 수정되었습니다.' : '강좌가 추가되었습니다.', 'success');
+      loadCourses();
+    }
+
+    async function deleteCourse(id, name) {
+      if (!confirm(`"${name}" 강좌를 삭제하시겠습니까?\n신청 내역도 모두 삭제됩니다.`)) return;
+      const res = await fetch(`/api/admin/courses/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error, 'error'); return; }
+      showToast('강좌가 삭제되었습니다.', 'success');
+      loadCourses();
+    }
+
+    async function showEnrollments(courseId, courseName) {
+      document.getElementById('enrollModalTitle').textContent = `"${courseName}" 수강 신청자`;
+      document.getElementById('enrollList').innerHTML = '<p style="text-align:center;padding:1rem;color:var(--text-muted)">불러오는 중...</p>';
+      openModal('enrollModal');
+
+      const res = await fetch(`/api/admin/courses/${courseId}/enrollments`);
+      const list = await res.json();
+      const el = document.getElementById('enrollList');
+
+      if (!list.length) {
+        el.innerHTML = '<div class="empty"><div class="empty-icon">👤</div><p>수강 신청자가 없습니다.</p></div>';
+        return;
+      }
+      el.innerHTML = `<div class="table-wrap"><table>
+        <thead><tr><th>번호</th><th>이름</th><th>신청일</th></tr></thead>
+        <tbody>${list.map((u, i) => `<tr>
+          <td>${i + 1}</td>
+          <td><strong>${esc(u.name)}</strong></td>
+          <td>${fmtDate(u.enrolled_at)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────────
+    async function loadUsers() {
+      const res = await fetch('/api/admin/users');
+      const users = await res.json();
+      document.getElementById('userCount').textContent = `전체 회원 ${users.length}명`;
+
+      const el = document.getElementById('userTable');
+      if (!users.length) {
+        el.innerHTML = '<div class="empty"><div class="empty-icon">👥</div><p>회원이 없습니다.</p></div>';
+        return;
+      }
+
+      el.innerHTML = `<div class="table-wrap"><table>
+        <thead><tr>
+          <th style="width:12%">목장</th>
+          <th style="width:15%">이름</th>
+          <th style="width:12%">역할</th>
+          <th style="width:12%">수강 신청</th>
+          <th style="width:15%">가입일</th>
+          <th style="width:34%">관리</th>
+        </tr></thead>
+        <tbody>${users.map(u => `<tr>
+          <td><strong style="font-size:1rem">${esc(u.ranch || '-')}</strong></td>
+          <td style="font-size:1rem;font-weight:600">${esc(u.name)}</td>
+          <td><span class="tag ${u.role === 'admin' ? 'tag-admin' : 'tag-user'}">${u.role === 'admin' ? '관리자' : '학생'}</span></td>
+          <td style="font-size:1rem">${u.enrollment_count}개</td>
+          <td style="font-size:.9rem;color:var(--text-muted)">${fmtDate(u.created_at)}</td>
+          <td>
+            <div class="flex gap-2">
+              <select class="js-change-role" data-id="${u.id}" style="font-size:.85rem;padding:.35rem .6rem">
+                <option value="user" ${u.role === 'user' ? 'selected' : ''}>학생</option>
+                <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>관리자</option>
+              </select>
+              <button class="btn btn-danger btn-sm js-delete-user" data-id="${u.id}" data-name="${esc(u.name)}">삭제</button>
+            </div>
+          </td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+    }
+
+    async function changeRole(id, role) {
+      const res = await fetch(`/api/admin/users/${id}/role`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role })
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error, 'error'); loadUsers(); return; }
+      showToast('역할이 변경되었습니다.', 'success');
+    }
+
+    async function deleteUser(id, name) {
+      if (!confirm(`"${name}" 계정을 삭제하시겠습니까?\n모든 수강 신청 내역도 삭제됩니다.`)) return;
+      const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error, 'error'); return; }
+      showToast('계정이 삭제되었습니다.', 'success');
+      loadUsers();
+    }
+
+    // ── Utilities ─────────────────────────────────────────────────────────────
+    function openModal(id) { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+    function esc(str) {
+      return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function fmtDate(d) { return d ? new Date(d).toLocaleDateString('ko-KR') : '-'; }
+    function showToast(msg, type = '') {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.className = 'toast show' + (type ? ' ' + type : '');
+      setTimeout(() => t.className = 'toast', 2500);
+    }
+    async function logout() { await fetch('/api/logout', { method: 'POST' }); window.location.href = '/'; }
+
+    // Close modal on backdrop click
+    document.querySelectorAll('.modal-overlay').forEach(el =>
+      el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); })
+    );
+
+    // Delegated event listeners — avoids inline onclick with user data
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('button, select');
+      if (!btn) return;
+
+      if (btn.classList.contains('js-show-enrollments')) {
+        showEnrollments(btn.dataset.id, btn.dataset.name);
+      } else if (btn.classList.contains('js-edit-course')) {
+        editCourse(Number(btn.dataset.id));
+      } else if (btn.classList.contains('js-delete-course')) {
+        deleteCourse(btn.dataset.id, btn.dataset.name);
+      } else if (btn.classList.contains('js-delete-user')) {
+        deleteUser(btn.dataset.id, btn.dataset.name);
+      }
+    });
+
+    document.addEventListener('change', e => {
+      const sel = e.target.closest('select.js-change-role');
+      if (sel) changeRole(sel.dataset.id, sel.value);
+    });
+
+    init();
+  </script>
+</body>
+</html>

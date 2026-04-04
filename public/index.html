@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>수강신청 시스템</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <h1>수강신청 시스템</h1>
+      <p>Course Registration System</p>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="showTab('login')">로그인</button>
+      <button class="tab-btn" onclick="showTab('signup')">회원가입</button>
+    </div>
+
+    <!-- Login Form -->
+    <div id="loginForm">
+      <div id="loginError" class="error-msg"></div>
+      <div class="form-group">
+        <label>이름</label>
+        <input type="text" id="loginName" placeholder="홍길동" autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label>생년월일 6자리</label>
+        <input type="text" id="loginBirth" placeholder="001204" maxlength="6" inputmode="numeric">
+        <div class="hint">예: 2000년 12월 4일 → 001204</div>
+      </div>
+      <button class="btn btn-primary mt-2" onclick="login()">로그인</button>
+    </div>
+
+    <!-- Signup Form -->
+    <div id="signupForm" style="display:none">
+      <div id="signupError" class="error-msg"></div>
+      <div id="signupSuccess" class="success-msg"></div>
+      <div class="form-group">
+        <label>이름</label>
+        <input type="text" id="signupName" placeholder="홍길동" autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label>생년월일 6자리</label>
+        <input type="text" id="signupBirth" placeholder="001204" maxlength="6" inputmode="numeric">
+        <div class="hint">예: 2000년 12월 4일 → 001204 (비밀번호로 사용됩니다)</div>
+      </div>
+      <div class="form-group">
+        <label>목장</label>
+        <input type="text" id="signupRanch" placeholder="1-1">
+        <div class="hint">예: 1-1, 2-3</div>
+      </div>
+      <button class="btn btn-primary mt-2" onclick="signup()">회원가입</button>
+    </div>
+  </div>
+
+  <script>
+    function showTab(tab) {
+      const isLogin = tab === 'login';
+      document.getElementById('loginForm').style.display = isLogin ? '' : 'none';
+      document.getElementById('signupForm').style.display = isLogin ? 'none' : '';
+      document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === (isLogin ? 0 : 1)));
+    }
+
+    async function login() {
+      const name = document.getElementById('loginName').value.trim();
+      const birth = document.getElementById('loginBirth').value.trim();
+      const errEl = document.getElementById('loginError');
+      errEl.style.display = 'none';
+
+      const res = await fetch('/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, birth })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        errEl.textContent = data.error;
+        errEl.style.display = 'block';
+        return;
+      }
+
+      window.location.href = data.role === 'admin' ? '/admin.html' : '/dashboard.html';
+    }
+
+    async function signup() {
+      const name = document.getElementById('signupName').value.trim();
+      const birth = document.getElementById('signupBirth').value.trim();
+      const ranch = document.getElementById('signupRanch').value.trim();
+      const errEl = document.getElementById('signupError');
+      const okEl = document.getElementById('signupSuccess');
+      errEl.style.display = 'none';
+      okEl.style.display = 'none';
+
+      const res = await fetch('/api/signup', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, birth, ranch })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        errEl.textContent = data.error;
+        errEl.style.display = 'block';
+        return;
+      }
+
+      window.location.href = '/dashboard.html';
+    }
+
+    // Enter key support
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const isLogin = document.getElementById('loginForm').style.display !== 'none';
+      if (isLogin) login(); else signup();
+    });
+
+    // Redirect if already logged in (only once — avoid loops)
+    if (!sessionStorage.getItem('redirected')) {
+      fetch('/api/me').then(r => r.ok ? r.json() : null).then(u => {
+        if (u?.id) {
+          sessionStorage.setItem('redirected', '1');
+          window.location.href = u.role === 'admin' ? '/admin.html' : '/dashboard.html';
+        }
+      }).catch(() => {});
+    } else {
+      sessionStorage.removeItem('redirected');
+    }
+  </script>
+</body>
+</html>
