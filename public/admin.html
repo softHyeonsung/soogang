@@ -25,6 +25,7 @@
     <div class="admin-tabs">
       <button class="admin-tab active" onclick="switchTab('courses')">강좌 관리</button>
       <button class="admin-tab" onclick="switchTab('users')">회원 관리</button>
+      <button class="admin-tab" onclick="switchTab('settings')">기간 설정</button>
     </div>
 
     <!-- Courses Tab -->
@@ -40,6 +41,33 @@
     <div id="tabUsers" style="display:none">
       <div class="mb-2" style="font-weight:700;font-size:.95rem" id="userCount"></div>
       <div id="userTable"></div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="tabSettings" style="display:none">
+      <div style="max-width:480px">
+        <div id="regStatusBanner" style="display:none;padding:.75rem 1rem;border-radius:8px;margin-bottom:1.25rem;font-size:.95rem;font-weight:600"></div>
+        <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);padding:1.5rem">
+          <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:1.25rem">수강신청 기간 설정</h3>
+          <div id="settingsError" class="error-msg"></div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;width:fit-content">
+              <input type="checkbox" id="regEnabled" style="width:16px;height:16px;accent-color:var(--primary)">
+              <span style="font-weight:600">기간 제한 활성화</span>
+            </label>
+            <div class="hint" style="margin-top:.4rem">활성화하면 아래 기간 외에는 수강신청이 불가합니다.</div>
+          </div>
+          <div class="form-group">
+            <label>신청 시작</label>
+            <input type="datetime-local" id="regStart" style="width:100%;padding:.6rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem;box-sizing:border-box">
+          </div>
+          <div class="form-group">
+            <label>신청 종료</label>
+            <input type="datetime-local" id="regEnd" style="width:100%;padding:.6rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem;box-sizing:border-box">
+          </div>
+          <button class="btn btn-primary" onclick="saveSettings()" style="width:100%;margin-top:.5rem">저장</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -90,6 +118,19 @@
         <input type="number" id="cCapacity" placeholder="30" min="1">
       </div>
       <div class="form-group">
+        <label>성별 정원 <span style="font-weight:400;font-size:.82rem;color:var(--text-muted)">(0 또는 빈칸이면 제한 없음)</span></label>
+        <div style="display:flex;gap:.75rem;margin-top:.25rem">
+          <div style="flex:1">
+            <label style="font-size:.85rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.3rem">남자</label>
+            <input type="number" id="cCapacityMale" placeholder="0" min="0" style="width:100%;padding:.6rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem;box-sizing:border-box">
+          </div>
+          <div style="flex:1">
+            <label style="font-size:.85rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.3rem">여자</label>
+            <input type="number" id="cCapacityFemale" placeholder="0" min="0" style="width:100%;padding:.6rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem;box-sizing:border-box">
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
         <label>강좌 설명</label>
         <textarea id="cDesc" rows="3" placeholder="강좌에 대한 설명을 입력하세요"></textarea>
       </div>
@@ -106,6 +147,15 @@
       <div class="modal-header">
         <h3 id="enrollModalTitle">수강 신청자 목록</h3>
         <button class="modal-close" onclick="closeModal('enrollModal')">×</button>
+      </div>
+      <div style="display:flex;gap:.5rem;margin-bottom:.75rem;align-items:center">
+        <span style="font-size:.85rem;color:var(--text-muted);flex-shrink:0">성별 필터:</span>
+        <div style="display:flex;gap:.35rem" id="genderFilterBtns">
+          <button class="btn btn-sm gender-filter-btn active" data-gender="전체" onclick="filterEnrollByGender('전체')">전체</button>
+          <button class="btn btn-sm gender-filter-btn" data-gender="남" onclick="filterEnrollByGender('남')">남</button>
+          <button class="btn btn-sm gender-filter-btn" data-gender="여" onclick="filterEnrollByGender('여')">여</button>
+        </div>
+        <span id="enrollFilterCount" style="font-size:.85rem;color:var(--text-muted);margin-left:auto"></span>
       </div>
       <div id="enrollList"></div>
     </div>
@@ -126,12 +176,14 @@
     }
 
     function switchTab(tab) {
-      document.getElementById('tabCourses').style.display = tab === 'courses' ? '' : 'none';
-      document.getElementById('tabUsers').style.display = tab === 'users' ? '' : 'none';
-      document.querySelectorAll('.admin-tab').forEach((b, i) =>
-        b.classList.toggle('active', (i === 0 && tab === 'courses') || (i === 1 && tab === 'users'))
-      );
-      if (tab === 'courses') loadCourses(); else loadUsers();
+      document.getElementById('tabCourses').style.display  = tab === 'courses'  ? '' : 'none';
+      document.getElementById('tabUsers').style.display    = tab === 'users'    ? '' : 'none';
+      document.getElementById('tabSettings').style.display = tab === 'settings' ? '' : 'none';
+      const tabs = ['courses', 'users', 'settings'];
+      document.querySelectorAll('.admin-tab').forEach((b, i) => b.classList.toggle('active', tabs[i] === tab));
+      if (tab === 'courses') loadCourses();
+      else if (tab === 'users') loadUsers();
+      else loadSettings();
     }
 
     // ── Courses ──────────────────────────────────────────────────────────────
@@ -148,17 +200,19 @@
 
       el.innerHTML = `<div class="table-wrap"><table>
         <thead><tr>
-          <th style="width:28%">강좌명</th>
-          <th style="width:13%">담당교수</th>
-          <th style="width:17%">강의시간</th>
-          <th style="width:18%">수강인원</th>
+          <th style="width:4%" title="드래그하여 순서 변경"></th>
+          <th style="width:26%">강좌명</th>
+          <th style="width:12%">담당교수</th>
+          <th style="width:15%">강의시간</th>
+          <th style="width:17%">수강인원</th>
           <th style="width:10%">신청자</th>
-          <th style="width:14%">관리</th>
+          <th style="width:16%">관리</th>
         </tr></thead>
         <tbody>${courses.map(c => {
           const pct = Math.min(100, Math.round((c.enrolled_count / c.capacity) * 100));
           const full = c.enrolled_count >= c.capacity;
-          return `<tr>
+          return `<tr data-id="${c.id}">
+            <td class="drag-handle" title="드래그하여 순서 변경">⠿</td>
             <td class="wrap">
               <div style="font-size:1rem;font-weight:700">${esc(c.name)}</div>
               ${c.description ? `<div style="font-size:.85rem;color:var(--text-muted);margin-top:.15rem">${esc(c.description.substring(0,50))}${c.description.length>50?'…':''}</div>` : ''}
@@ -170,6 +224,11 @@
                 <div style="height:100%;width:${pct}%;border-radius:99px;background:${full ? 'var(--danger)' : 'var(--primary)'}"></div>
               </div>
               <span style="font-size:.9rem;color:var(--text-muted)">${c.enrolled_count} / ${c.capacity} 명</span>
+              ${(c.capacity_male > 0 || c.capacity_female > 0) ? `
+              <div style="font-size:.82rem;margin-top:.25rem;display:flex;gap:.5rem;flex-wrap:wrap">
+                ${c.capacity_male > 0 ? `<span style="color:#2563eb">남 ${c.enrolled_male}/${c.capacity_male}</span>` : ''}
+                ${c.capacity_female > 0 ? `<span style="color:#db2777">여 ${c.enrolled_female}/${c.capacity_female}</span>` : ''}
+              </div>` : ''}
             </td>
             <td>
               <button class="btn btn-outline btn-sm js-show-enrollments" data-id="${c.id}" data-name="${esc(c.name)}">${c.enrolled_count}명 보기</button>
@@ -183,6 +242,8 @@
           </tr>`;
         }).join('')}</tbody>
       </table></div>`;
+
+      attachDragHandlers(el.querySelector('tbody'));
     }
 
     function openCourseModal(course = null) {
@@ -195,6 +256,8 @@
       document.getElementById('cStartTime').value = course?.start_time || '';
       document.getElementById('cEndTime').value = course?.end_time || '';
       document.getElementById('cCapacity').value = course?.capacity || '';
+      document.getElementById('cCapacityMale').value = course?.capacity_male || '';
+      document.getElementById('cCapacityFemale').value = course?.capacity_female || '';
       document.getElementById('cDesc').value = course?.description || '';
       // Set day checkboxes
       const selectedDays = [...(course?.days || '')];
@@ -222,6 +285,8 @@
         start_time: document.getElementById('cStartTime').value,
         end_time: document.getElementById('cEndTime').value,
         capacity: parseInt(document.getElementById('cCapacity').value),
+        capacity_male: parseInt(document.getElementById('cCapacityMale').value) || 0,
+        capacity_female: parseInt(document.getElementById('cCapacityFemale').value) || 0,
         description: document.getElementById('cDesc').value.trim()
       };
       const errEl = document.getElementById('courseModalError');
@@ -247,27 +312,99 @@
       loadCourses();
     }
 
+    let allEnrollments = [];
+    let currentGenderFilter = '전체';
+
     async function showEnrollments(courseId, courseName) {
       document.getElementById('enrollModalTitle').textContent = `"${courseName}" 수강 신청자`;
       document.getElementById('enrollList').innerHTML = '<p style="text-align:center;padding:1rem;color:var(--text-muted)">불러오는 중...</p>';
+      currentGenderFilter = '전체';
+      document.querySelectorAll('.gender-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.gender === '전체'));
       openModal('enrollModal');
 
       const res = await fetch(`/api/admin/courses/${courseId}/enrollments`);
-      const list = await res.json();
-      const el = document.getElementById('enrollList');
+      allEnrollments = await res.json();
+      renderEnrollList();
+    }
 
-      if (!list.length) {
-        el.innerHTML = '<div class="empty"><div class="empty-icon">👤</div><p>수강 신청자가 없습니다.</p></div>';
+    function filterEnrollByGender(gender) {
+      currentGenderFilter = gender;
+      document.querySelectorAll('.gender-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.gender === gender));
+      renderEnrollList();
+    }
+
+    function renderEnrollList() {
+      const filtered = currentGenderFilter === '전체'
+        ? allEnrollments
+        : allEnrollments.filter(u => u.gender === currentGenderFilter);
+      const el = document.getElementById('enrollList');
+      document.getElementById('enrollFilterCount').textContent = `${filtered.length}명`;
+
+      if (!filtered.length) {
+        el.innerHTML = '<div class="empty"><div class="empty-icon">👤</div><p>해당하는 수강 신청자가 없습니다.</p></div>';
         return;
       }
       el.innerHTML = `<div class="table-wrap"><table>
-        <thead><tr><th>번호</th><th>이름</th><th>신청일</th></tr></thead>
-        <tbody>${list.map((u, i) => `<tr>
+        <thead><tr><th>번호</th><th>이름</th><th>성별</th><th>신청일</th></tr></thead>
+        <tbody>${filtered.map((u, i) => `<tr>
           <td>${i + 1}</td>
           <td><strong>${esc(u.name)}</strong></td>
+          <td>${esc(u.gender || '-')}</td>
           <td>${fmtDate(u.enrolled_at)}</td>
         </tr>`).join('')}</tbody>
       </table></div>`;
+    }
+
+    // ── Settings ─────────────────────────────────────────────────────────────
+    async function loadSettings() {
+      const res = await fetch('/api/settings/registration');
+      const s = await res.json();
+      document.getElementById('regEnabled').checked = s.enabled;
+      document.getElementById('regStart').value = s.start || '';
+      document.getElementById('regEnd').value   = s.end   || '';
+      document.getElementById('settingsError').style.display = 'none';
+      renderRegStatusBanner(s);
+    }
+
+    function renderRegStatusBanner(s) {
+      const banner = document.getElementById('regStatusBanner');
+      if (!s.enabled) {
+        banner.style.display = 'none';
+        return;
+      }
+      const now = new Date();
+      const start = s.start ? new Date(s.start) : null;
+      const end   = s.end   ? new Date(s.end)   : null;
+      let msg, bg, color;
+      if (start && now < start) {
+        msg = `대기 중 · 시작: ${fmtDateTime(s.start)}`;
+        bg = '#fef9c3'; color = '#854d0e';
+      } else if (end && now > end) {
+        msg = `신청 종료됨 · 종료: ${fmtDateTime(s.end)}`;
+        bg = '#fee2e2'; color = '#991b1b';
+      } else {
+        msg = `신청 진행 중${end ? ` · 마감: ${fmtDateTime(s.end)}` : ''}`;
+        bg = '#dcfce7'; color = '#166534';
+      }
+      banner.textContent = msg;
+      banner.style.cssText = `display:block;padding:.75rem 1rem;border-radius:8px;margin-bottom:1.25rem;font-size:.95rem;font-weight:600;background:${bg};color:${color}`;
+    }
+
+    async function saveSettings() {
+      const enabled = document.getElementById('regEnabled').checked;
+      const start   = document.getElementById('regStart').value;
+      const end     = document.getElementById('regEnd').value;
+      const errEl   = document.getElementById('settingsError');
+      errEl.style.display = 'none';
+
+      const res = await fetch('/api/admin/settings/registration', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, start, end })
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+      showToast('기간 설정이 저장되었습니다.', 'success');
+      loadSettings();
     }
 
     // ── Users ─────────────────────────────────────────────────────────────────
@@ -284,16 +421,18 @@
 
       el.innerHTML = `<div class="table-wrap"><table>
         <thead><tr>
-          <th style="width:12%">목장</th>
-          <th style="width:15%">이름</th>
-          <th style="width:12%">역할</th>
-          <th style="width:12%">수강 신청</th>
-          <th style="width:15%">가입일</th>
-          <th style="width:34%">관리</th>
+          <th style="width:10%">목장</th>
+          <th style="width:13%">이름</th>
+          <th style="width:8%">성별</th>
+          <th style="width:10%">역할</th>
+          <th style="width:10%">수강 신청</th>
+          <th style="width:13%">가입일</th>
+          <th style="width:36%">관리</th>
         </tr></thead>
         <tbody>${users.map(u => `<tr>
           <td><strong style="font-size:1rem">${esc(u.ranch || '-')}</strong></td>
           <td style="font-size:1rem;font-weight:600">${esc(u.name)}</td>
+          <td style="font-size:1rem">${esc(u.gender || '-')}</td>
           <td><span class="tag ${u.role === 'admin' ? 'tag-admin' : 'tag-user'}">${u.role === 'admin' ? '관리자' : '학생'}</span></td>
           <td style="font-size:1rem">${u.enrollment_count}개</td>
           <td style="font-size:.9rem;color:var(--text-muted)">${fmtDate(u.created_at)}</td>
@@ -328,6 +467,68 @@
       loadUsers();
     }
 
+    // ── Drag & Drop ───────────────────────────────────────────────────────────
+    let dragSrcRow = null;
+
+    function attachDragHandlers(tbody) {
+      tbody.querySelectorAll('tr').forEach(row => {
+        row.setAttribute('draggable', 'true');
+
+        row.addEventListener('dragstart', e => {
+          dragSrcRow = row;
+          e.dataTransfer.effectAllowed = 'move';
+          setTimeout(() => row.classList.add('dragging'), 0);
+        });
+
+        row.addEventListener('dragend', () => {
+          row.classList.remove('dragging');
+          tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+          dragSrcRow = null;
+        });
+
+        row.addEventListener('dragover', e => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (dragSrcRow && dragSrcRow !== row) {
+            tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+            row.classList.add('drag-over');
+          }
+        });
+
+        row.addEventListener('dragleave', e => {
+          if (!row.contains(e.relatedTarget)) row.classList.remove('drag-over');
+        });
+
+        row.addEventListener('drop', e => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!dragSrcRow || dragSrcRow === row) return;
+          row.classList.remove('drag-over');
+
+          const rows = [...tbody.querySelectorAll('tr')];
+          const srcIdx = rows.indexOf(dragSrcRow);
+          const dstIdx = rows.indexOf(row);
+          if (srcIdx < dstIdx) {
+            tbody.insertBefore(dragSrcRow, row.nextSibling);
+          } else {
+            tbody.insertBefore(dragSrcRow, row);
+          }
+
+          const ids = [...tbody.querySelectorAll('tr')].map(r => r.dataset.id);
+          saveOrder(ids);
+        });
+      });
+    }
+
+    async function saveOrder(ids) {
+      const res = await fetch('/api/admin/courses/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      });
+      if (!res.ok) showToast('순서 저장에 실패했습니다.', 'error');
+    }
+
     // ── Utilities ─────────────────────────────────────────────────────────────
     function openModal(id) { document.getElementById(id).classList.add('open'); }
     function closeModal(id) { document.getElementById(id).classList.remove('open'); }
@@ -335,6 +536,10 @@
       return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
     function fmtDate(d) { return d ? new Date(d).toLocaleDateString('ko-KR') : '-'; }
+    function fmtDateTime(d) {
+      if (!d) return '-';
+      return new Date(d).toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12: false });
+    }
     function showToast(msg, type = '') {
       const t = document.getElementById('toast');
       t.textContent = msg; t.className = 'toast show' + (type ? ' ' + type : '');

@@ -202,6 +202,38 @@ textarea:focus { outline: none; border-color: var(--primary); background: #fff; 
 .toast.success { background: #15803d; }
 .toast.error { background: var(--danger); }
 
+.drag-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  text-align: center;
+  user-select: none;
+  padding: 0 .5rem !important;
+}
+.drag-handle:active { cursor: grabbing; }
+tr.dragging { opacity: 0.4; }
+tr.drag-over > td { border-top: 2px solid var(--primary) !important; }
+
+.gender-filter-btn {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+  padding: .25rem .65rem;
+  font-size: .82rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.gender-filter-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.gender-filter-btn:hover:not(.active) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 @media (max-width: 600px) {
   .course-grid { grid-template-columns: 1fr; }
   .navbar { padding: 0 1rem; }

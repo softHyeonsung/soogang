@@ -39,11 +39,12 @@ function requireAdmin(req, res, next) {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 app.post('/api/signup', (req, res) => {
-  const { name, birth, ranch } = req.body;
+  const { name, birth, ranch, gender } = req.body;
   if (!name?.trim() || !birth) return res.status(400).json({ error: '이름과 생년월일을 입력하세요.' });
   if (!/^\d{6}$/.test(birth)) return res.status(400).json({ error: '생년월일은 6자리 숫자여야 합니다. (예: 001204)' });
   if (!ranch?.trim()) return res.status(400).json({ error: '목장을 입력하세요.' });
   if (!/^\d+-\d+$/.test(ranch.trim())) return res.status(400).json({ error: '목장은 숫자-숫자 형식이어야 합니다. (예: 1-1)' });
+  if (!gender || !['남', '여'].includes(gender)) return res.status(400).json({ error: '성별을 선택하세요.' });
 
   // Check duplicate by name only (birth will be hashed, so compare before hashing)
   const existing = db.prepare('SELECT id, birth FROM users WHERE name = ?').all(name.trim());
@@ -53,7 +54,7 @@ app.post('/api/signup', (req, res) => {
 
   const hashed = bcrypt.hashSync(birth, 10);
   try {
-    const result = db.prepare('INSERT INTO users (name, birth, ranch, role) VALUES (?, ?, ?, ?)').run(name.trim(), hashed, ranch.trim(), 'user');
+    const result = db.prepare('INSERT INTO users (name, birth, ranch, gender, role) VALUES (?, ?, ?, ?, ?)').run(name.trim(), hashed, ranch.trim(), gender, 'user');
     req.session.userId = result.lastInsertRowid;
     res.json({ success: true, role: 'user', name: name.trim() });
   } catch {
@@ -100,19 +101,78 @@ function timesConflict(a, b) {
   return s1 < e2 && s2 < e1;
 }
 
+// ── Settings ─────────────────────────────────────────────────────────────────
+function getSetting(key) {
+  return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value ?? '';
+}
+function setSetting(key, value) {
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
+}
+
+app.get('/api/settings/registration', (req, res) => {
+  res.json({
+    enabled: getSetting('reg_enabled') === 'true',
+    start: getSetting('reg_start'),
+    end: getSetting('reg_end')
+  });
+});
+
+app.put('/api/admin/settings/registration', requireAdmin, (req, res) => {
+  const { enabled, start, end } = req.body;
+  if (enabled && start && end && new Date(start) >= new Date(end))
+    return res.status(400).json({ error: '종료 시간은 시작 시간보다 늦어야 합니다.' });
+  db.transaction(() => {
+    setSetting('reg_enabled', enabled ? 'true' : 'false');
+    setSetting('reg_start', start || '');
+    setSetting('reg_end', end || '');
+  })();
+  res.json({ success: true });
+});
+
 // ── Courses (user) ────────────────────────────────────────────────────────────
 app.get('/api/courses', requireAuth, (req, res) => {
+  const currentUser = db.prepare('SELECT gender FROM users WHERE id = ?').get(req.session.userId);
   const courses = db.prepare(`
     SELECT c.*,
       (SELECT COUNT(*) FROM enrollments WHERE course_id = c.id) AS enrolled_count,
-      (SELECT COUNT(*) FROM enrollments WHERE course_id = c.id AND user_id = ?) AS is_enrolled
-    FROM courses c ORDER BY c.created_at DESC
+      (SELECT COUNT(*) FROM enrollments WHERE course_id = c.id AND user_id = ?) AS is_enrolled,
+      (SELECT COUNT(*) FROM enrollments e JOIN users u ON e.user_id = u.id WHERE e.course_id = c.id AND u.gender = '남') AS enrolled_male,
+      (SELECT COUNT(*) FROM enrollments e JOIN users u ON e.user_id = u.id WHERE e.course_id = c.id AND u.gender = '여') AS enrolled_female
+    FROM courses c ORDER BY c.sort_order ASC, c.id ASC
   `).all(req.session.userId);
-  res.json(courses);
+
+  // Compute gender_full for each course based on current user's gender
+  const genderCountStmt = db.prepare(`
+    SELECT COUNT(*) AS cnt FROM enrollments e
+    JOIN users u ON e.user_id = u.id
+    WHERE e.course_id = ? AND u.gender = ?
+  `);
+  const enriched = courses.map(c => {
+    let gender_full = false;
+    if (currentUser?.gender === '남' && c.capacity_male > 0) {
+      const cnt = genderCountStmt.get(c.id, '남').cnt;
+      if (cnt >= c.capacity_male) gender_full = true;
+    }
+    if (currentUser?.gender === '여' && c.capacity_female > 0) {
+      const cnt = genderCountStmt.get(c.id, '여').cnt;
+      if (cnt >= c.capacity_female) gender_full = true;
+    }
+    return { ...c, gender_full };
+  });
+  res.json(enriched);
 });
 
 app.post('/api/courses/:id/enroll', requireAuth, (req, res) => {
   const courseId = req.params.id;
+
+  // Check registration period
+  if (getSetting('reg_enabled') === 'true') {
+    const start = getSetting('reg_start');
+    const end   = getSetting('reg_end');
+    const now   = new Date();
+    if (start && now < new Date(start)) return res.status(400).json({ error: '아직 수강신청 기간이 시작되지 않았습니다.' });
+    if (end   && now > new Date(end))   return res.status(400).json({ error: '수강신청 기간이 종료되었습니다.' });
+  }
 
   // Use a transaction to prevent race conditions on capacity check
   const enroll = db.transaction(() => {
@@ -121,6 +181,22 @@ app.post('/api/courses/:id/enroll', requireAuth, (req, res) => {
 
     const enrolledCount = db.prepare('SELECT COUNT(*) AS cnt FROM enrollments WHERE course_id = ?').get(courseId).cnt;
     if (enrolledCount >= course.capacity) return { status: 400, error: '정원이 초과되었습니다.' };
+
+    // Check gender-specific capacity
+    const currentUser = db.prepare('SELECT gender FROM users WHERE id = ?').get(req.session.userId);
+    const genderCountStmt = db.prepare(`
+      SELECT COUNT(*) AS cnt FROM enrollments e
+      JOIN users u ON e.user_id = u.id
+      WHERE e.course_id = ? AND u.gender = ?
+    `);
+    if (currentUser?.gender === '남' && course.capacity_male > 0) {
+      const cnt = genderCountStmt.get(courseId, '남').cnt;
+      if (cnt >= course.capacity_male) return { status: 400, error: `남자 정원(${course.capacity_male}명)이 마감되었습니다.` };
+    }
+    if (currentUser?.gender === '여' && course.capacity_female > 0) {
+      const cnt = genderCountStmt.get(courseId, '여').cnt;
+      if (cnt >= course.capacity_female) return { status: 400, error: `여자 정원(${course.capacity_female}명)이 마감되었습니다.` };
+    }
 
     // Check schedule conflict using structured time fields
     if (course.start_time && course.end_time) {
@@ -168,14 +244,28 @@ app.get('/api/my-enrollments', requireAuth, (req, res) => {
 // ── Admin: Courses ────────────────────────────────────────────────────────────
 app.get('/api/admin/courses', requireAdmin, (req, res) => {
   const courses = db.prepare(`
-    SELECT c.*, (SELECT COUNT(*) FROM enrollments WHERE course_id = c.id) AS enrolled_count
-    FROM courses c ORDER BY c.created_at DESC
+    SELECT c.*,
+      (SELECT COUNT(*) FROM enrollments WHERE course_id = c.id) AS enrolled_count,
+      (SELECT COUNT(*) FROM enrollments e JOIN users u ON e.user_id = u.id WHERE e.course_id = c.id AND u.gender = '남') AS enrolled_male,
+      (SELECT COUNT(*) FROM enrollments e JOIN users u ON e.user_id = u.id WHERE e.course_id = c.id AND u.gender = '여') AS enrolled_female
+    FROM courses c ORDER BY c.sort_order ASC, c.id ASC
   `).all();
   res.json(courses);
 });
 
+app.put('/api/admin/courses/reorder', requireAdmin, (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: '잘못된 요청입니다.' });
+  const update = db.prepare('UPDATE courses SET sort_order = ? WHERE id = ?');
+  const updateAll = db.transaction((ids) => {
+    ids.forEach((id, idx) => update.run(idx, id));
+  });
+  updateAll(ids);
+  res.json({ success: true });
+});
+
 app.post('/api/admin/courses', requireAdmin, (req, res) => {
-  const { name, description, instructor, capacity, schedule, days, start_time, end_time } = req.body;
+  const { name, description, instructor, capacity, schedule, days, start_time, end_time, capacity_male, capacity_female } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: '강좌명을 입력하세요.' });
   const cap = parseInt(capacity);
   if (!cap || cap < 1) return res.status(400).json({ error: '정원은 1 이상이어야 합니다.' });
@@ -183,16 +273,23 @@ app.post('/api/admin/courses', requireAdmin, (req, res) => {
     return res.status(400).json({ error: '시작시간과 종료시간을 모두 입력하세요.' });
   if (start_time && end_time && start_time >= end_time)
     return res.status(400).json({ error: '종료시간은 시작시간보다 늦어야 합니다.' });
+  const capM = parseInt(capacity_male) || 0;
+  const capF = parseInt(capacity_female) || 0;
+  if (capM < 0 || capF < 0) return res.status(400).json({ error: '성별 정원은 0 이상이어야 합니다.' });
+  if (capM > cap) return res.status(400).json({ error: `남자 정원(${capM})은 전체 정원(${cap})을 초과할 수 없습니다.` });
+  if (capF > cap) return res.status(400).json({ error: `여자 정원(${capF})은 전체 정원(${cap})을 초과할 수 없습니다.` });
+  if (capM > 0 && capF > 0 && capM + capF > cap)
+    return res.status(400).json({ error: `남자 정원(${capM}) + 여자 정원(${capF})이 전체 정원(${cap})을 초과합니다.` });
 
   const result = db.prepare(
-    'INSERT INTO courses (name, description, instructor, capacity, schedule, days, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO courses (name, description, instructor, capacity, schedule, days, start_time, end_time, capacity_male, capacity_female) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(name.trim(), description?.trim() || '', instructor?.trim() || '', cap,
-        schedule?.trim() || '', days?.trim() || '', start_time || '', end_time || '');
+        schedule?.trim() || '', days?.trim() || '', start_time || '', end_time || '', capM, capF);
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
 app.put('/api/admin/courses/:id', requireAdmin, (req, res) => {
-  const { name, description, instructor, capacity, schedule, days, start_time, end_time } = req.body;
+  const { name, description, instructor, capacity, schedule, days, start_time, end_time, capacity_male, capacity_female } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: '강좌명을 입력하세요.' });
   const cap = parseInt(capacity);
   if (!cap || cap < 1) return res.status(400).json({ error: '정원은 1 이상이어야 합니다.' });
@@ -200,14 +297,31 @@ app.put('/api/admin/courses/:id', requireAdmin, (req, res) => {
     return res.status(400).json({ error: '시작시간과 종료시간을 모두 입력하세요.' });
   if (start_time && end_time && start_time >= end_time)
     return res.status(400).json({ error: '종료시간은 시작시간보다 늦어야 합니다.' });
+  const capM = parseInt(capacity_male) || 0;
+  const capF = parseInt(capacity_female) || 0;
+  if (capM < 0 || capF < 0) return res.status(400).json({ error: '성별 정원은 0 이상이어야 합니다.' });
+  if (capM > cap) return res.status(400).json({ error: `남자 정원(${capM})은 전체 정원(${cap})을 초과할 수 없습니다.` });
+  if (capF > cap) return res.status(400).json({ error: `여자 정원(${capF})은 전체 정원(${cap})을 초과할 수 없습니다.` });
+  if (capM > 0 && capF > 0 && capM + capF > cap)
+    return res.status(400).json({ error: `남자 정원(${capM}) + 여자 정원(${capF})이 전체 정원(${cap})을 초과합니다.` });
 
   const enrolled = db.prepare('SELECT COUNT(*) AS cnt FROM enrollments WHERE course_id = ?').get(req.params.id).cnt;
   if (cap < enrolled) return res.status(400).json({ error: `현재 ${enrolled}명이 신청 중입니다. 정원을 ${enrolled} 이상으로 설정하세요.` });
 
+  // Check gender-specific capacity against current enrollments
+  if (capM > 0) {
+    const enrolledM = db.prepare(`SELECT COUNT(*) AS cnt FROM enrollments e JOIN users u ON e.user_id = u.id WHERE e.course_id = ? AND u.gender = '남'`).get(req.params.id).cnt;
+    if (capM < enrolledM) return res.status(400).json({ error: `현재 남자 ${enrolledM}명이 신청 중입니다. 남자 정원을 ${enrolledM} 이상으로 설정하세요.` });
+  }
+  if (capF > 0) {
+    const enrolledF = db.prepare(`SELECT COUNT(*) AS cnt FROM enrollments e JOIN users u ON e.user_id = u.id WHERE e.course_id = ? AND u.gender = '여'`).get(req.params.id).cnt;
+    if (capF < enrolledF) return res.status(400).json({ error: `현재 여자 ${enrolledF}명이 신청 중입니다. 여자 정원을 ${enrolledF} 이상으로 설정하세요.` });
+  }
+
   const result = db.prepare(
-    'UPDATE courses SET name=?, description=?, instructor=?, capacity=?, schedule=?, days=?, start_time=?, end_time=? WHERE id=?'
+    'UPDATE courses SET name=?, description=?, instructor=?, capacity=?, schedule=?, days=?, start_time=?, end_time=?, capacity_male=?, capacity_female=? WHERE id=?'
   ).run(name.trim(), description?.trim() || '', instructor?.trim() || '', cap,
-        schedule?.trim() || '', days?.trim() || '', start_time || '', end_time || '', req.params.id);
+        schedule?.trim() || '', days?.trim() || '', start_time || '', end_time || '', capM, capF, req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: '강좌를 찾을 수 없습니다.' });
   res.json({ success: true });
 });
@@ -224,7 +338,7 @@ app.delete('/api/admin/courses/:id', requireAdmin, (req, res) => {
 
 app.get('/api/admin/courses/:id/enrollments', requireAdmin, (req, res) => {
   const list = db.prepare(`
-    SELECT u.id, u.name, e.enrolled_at
+    SELECT u.id, u.name, u.gender, e.enrolled_at
     FROM enrollments e JOIN users u ON e.user_id = u.id
     WHERE e.course_id = ? ORDER BY e.enrolled_at ASC
   `).all(req.params.id);
@@ -234,7 +348,7 @@ app.get('/api/admin/courses/:id/enrollments', requireAdmin, (req, res) => {
 // ── Admin: Users ──────────────────────────────────────────────────────────────
 app.get('/api/admin/users', requireAdmin, (req, res) => {
   const users = db.prepare(`
-    SELECT u.id, u.name, u.ranch, u.role, u.created_at,
+    SELECT u.id, u.name, u.ranch, u.role, u.gender, u.created_at,
       (SELECT COUNT(*) FROM enrollments WHERE user_id = u.id) AS enrollment_count
     FROM users u ORDER BY u.ranch ASC, u.name ASC
   `).all();

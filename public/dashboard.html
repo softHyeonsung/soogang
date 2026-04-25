@@ -188,6 +188,8 @@
       </div>
     </div>
 
+    <div id="regBanner" style="display:none;padding:.75rem 1rem;border-radius:8px;margin-bottom:.75rem;font-size:.93rem;font-weight:600"></div>
+
     <div class="courses-area">
       <div class="course-table-wrap">
         <table>
@@ -223,6 +225,7 @@
 
   <script>
     let panelOpen = true;
+    let regOpen = true; // 수강신청 가능 여부
 
     async function init() {
       const res = await fetch('/api/me');
@@ -230,8 +233,42 @@
       const user = await res.json();
       if (user.role === 'admin') { window.location.href = '/admin.html'; return; }
       document.getElementById('userName').textContent = user.name + '님';
+
+      // 수강신청 기간 확인
+      try {
+        const rr = await fetch('/api/settings/registration');
+        const reg = await rr.json();
+        applyRegPeriod(reg);
+      } catch {}
+
       loadCourses();
       loadMyList();
+    }
+
+    function applyRegPeriod(reg) {
+      const banner = document.getElementById('regBanner');
+      if (!reg.enabled) { regOpen = true; banner.style.display = 'none'; return; }
+
+      const now   = new Date();
+      const start = reg.start ? new Date(reg.start) : null;
+      const end   = reg.end   ? new Date(reg.end)   : null;
+
+      if (start && now < start) {
+        regOpen = false;
+        showBanner(`수강신청 기간이 아닙니다. 시작: ${fmtDateTime(reg.start)}`, '#fef9c3', '#854d0e');
+      } else if (end && now > end) {
+        regOpen = false;
+        showBanner(`수강신청이 종료되었습니다. (종료: ${fmtDateTime(reg.end)})`, '#fee2e2', '#991b1b');
+      } else {
+        regOpen = true;
+        if (end) showBanner(`수강신청 진행 중 · 마감: ${fmtDateTime(reg.end)}`, '#dcfce7', '#166534');
+      }
+    }
+
+    function showBanner(msg, bg, color) {
+      const b = document.getElementById('regBanner');
+      b.textContent = msg;
+      b.style.cssText = `display:block;padding:.75rem 1rem;border-radius:8px;margin-bottom:.75rem;font-size:.93rem;font-weight:600;background:${bg};color:${color}`;
     }
 
     async function loadCourses() {
@@ -246,13 +283,15 @@
 
       tbody.innerHTML = courses.map(c => {
         const pct = Math.min(100, Math.round((c.enrolled_count / c.capacity) * 100));
-        const full = c.enrolled_count >= c.capacity;
+        const full = c.enrolled_count >= c.capacity || c.gender_full;
         const enrolled = c.is_enrolled > 0;
         const btn = enrolled
           ? `<button class="btn btn-outline" data-id="${c.id}" onclick="unenroll(${c.id})">수강 취소</button>`
-          : full
-            ? `<button class="btn btn-ghost" disabled>정원 마감</button>`
-            : `<button class="btn btn-primary" data-id="${c.id}" onclick="enroll(${c.id})">수강 신청</button>`;
+          : !regOpen
+            ? `<button class="btn btn-ghost" disabled>신청 불가</button>`
+            : full
+              ? `<button class="btn btn-ghost" disabled>정원 마감</button>`
+              : `<button class="btn btn-primary" data-id="${c.id}" onclick="enroll(${c.id})">수강 신청</button>`;
         return `<tr class="${enrolled ? 'enrolled' : ''}">
           <td class="wrap">
             <div class="course-name-cell">${esc(c.name)}</div>
@@ -263,6 +302,11 @@
           <td class="cap-wrap">
             <div class="cap-bar"><div class="cap-fill ${full ? 'full' : ''}" style="width:${pct}%"></div></div>
             <span class="cap-text">${c.enrolled_count} / ${c.capacity} 명</span>
+            ${(c.capacity_male > 0 || c.capacity_female > 0) ? `
+            <div style="font-size:.82rem;margin-top:.3rem;display:flex;gap:.5rem;flex-wrap:wrap">
+              ${c.capacity_male > 0 ? `<span style="color:#2563eb">남 ${c.enrolled_male}/${c.capacity_male}</span>` : ''}
+              ${c.capacity_female > 0 ? `<span style="color:#db2777">여 ${c.enrolled_female}/${c.capacity_female}</span>` : ''}
+            </div>` : ''}
           </td>
           <td class="action-cell">${btn}</td>
         </tr>`;
@@ -329,6 +373,10 @@
     }
     function fmtDate(d) {
       return d ? new Date(d).toLocaleDateString('ko-KR') : '-';
+    }
+    function fmtDateTime(d) {
+      if (!d) return '-';
+      return new Date(d).toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12: false });
     }
     function showToast(msg, type = '') {
       const t = document.getElementById('toast');
