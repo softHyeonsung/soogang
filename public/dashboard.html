@@ -167,6 +167,38 @@
       font-weight: 700;
       margin-left: .5rem;
     }
+
+    @media (max-width: 640px) {
+      .dashboard-body { padding: .75rem; }
+      .section-header h2 { font-size: 1.2rem; }
+
+      /* 강좌 테이블 → 카드 레이아웃 */
+      .course-table-wrap { border: none; box-shadow: none; background: transparent; overflow: visible; }
+      .course-table-wrap table,
+      .course-table-wrap tbody,
+      .course-table-wrap tr,
+      .course-table-wrap td { display: block; width: 100%; box-sizing: border-box; }
+      .course-table-wrap thead { display: none; }
+      .course-table-wrap tr {
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        margin-bottom: .6rem;
+        padding: .85rem 1rem;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+      .course-table-wrap tr.enrolled { border-color: var(--primary); background: #fafffe; }
+      .course-table-wrap tr:hover td { background: transparent; }
+      .course-table-wrap tr.enrolled:hover td { background: transparent; }
+      .course-table-wrap td { padding: .15rem 0; border-bottom: none; white-space: normal; font-size: .95rem; }
+      .cap-wrap { min-width: unset; margin-top: .35rem; }
+      .action-cell { width: 100%; margin-top: .6rem; }
+      .action-cell .btn { width: 100%; }
+
+      /* 내 수강목록 패널 */
+      .my-panel-body { overflow-x: auto; }
+      .my-panel-body th, .my-panel-body td { padding: .6rem .85rem; font-size: .9rem; }
+    }
   </style>
 </head>
 <body class="app">
