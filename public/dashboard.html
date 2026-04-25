@@ -253,11 +253,33 @@
     </div>
   </div>
 
+  <!-- 강좌 세부 모달 -->
+  <div class="modal-overlay" id="detailModal" onclick="if(event.target===this)closeDetail()">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-header">
+        <h3 id="detailName" style="font-size:1.15rem;font-weight:800;line-height:1.3;padding-right:.5rem"></h3>
+        <button class="modal-close" onclick="closeDetail()">×</button>
+      </div>
+      <div id="detailDesc" style="font-size:.92rem;color:var(--text-muted);margin-bottom:1.1rem;line-height:1.65;display:none"></div>
+      <div id="detailMeta" style="display:flex;flex-direction:column;gap:.7rem;font-size:.95rem;margin-bottom:1.25rem;padding:.9rem 1rem;background:var(--bg);border-radius:8px"></div>
+      <div style="margin-bottom:1.25rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.35rem">
+          <span style="font-size:.85rem;font-weight:600;color:var(--text-muted)">수강인원</span>
+          <span id="detailCapText" style="font-size:.88rem;color:var(--text-muted)"></span>
+        </div>
+        <div class="cap-bar"><div id="detailCapFill" class="cap-fill" style="width:0%"></div></div>
+        <div id="detailGenderCap" style="font-size:.85rem;margin-top:.4rem;display:flex;gap:.75rem"></div>
+      </div>
+      <div id="detailAction"></div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
     let panelOpen = true;
-    let regOpen = true; // 수강신청 가능 여부
+    let regOpen = true;
+    let courseList = [];
 
     async function init() {
       const res = await fetch('/api/me');
@@ -305,26 +327,26 @@
 
     async function loadCourses() {
       const res = await fetch('/api/courses');
-      const courses = await res.json();
+      courseList = await res.json();
       const tbody = document.getElementById('courseBody');
 
-      if (!courses.length) {
+      if (!courseList.length) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-muted);font-size:1rem">등록된 강좌가 없습니다.</td></tr>';
         return;
       }
 
-      tbody.innerHTML = courses.map(c => {
+      tbody.innerHTML = courseList.map(c => {
         const pct = Math.min(100, Math.round((c.enrolled_count / c.capacity) * 100));
         const full = c.enrolled_count >= c.capacity || c.gender_full;
         const enrolled = c.is_enrolled > 0;
         const btn = enrolled
-          ? `<button class="btn btn-outline" data-id="${c.id}" onclick="unenroll(${c.id})">수강 취소</button>`
+          ? `<button class="btn btn-outline" onclick="unenroll(${c.id})">수강 취소</button>`
           : !regOpen
             ? `<button class="btn btn-ghost" disabled>신청 불가</button>`
             : full
               ? `<button class="btn btn-ghost" disabled>정원 마감</button>`
-              : `<button class="btn btn-primary" data-id="${c.id}" onclick="enroll(${c.id})">수강 신청</button>`;
-        return `<tr class="${enrolled ? 'enrolled' : ''}">
+              : `<button class="btn btn-primary" onclick="enroll(${c.id})">수강 신청</button>`;
+        return `<tr class="${enrolled ? 'enrolled' : ''}" style="cursor:pointer" onclick="showDetail(${c.id})">
           <td class="wrap">
             <div class="course-name-cell">${esc(c.name)}</div>
             ${c.description ? `<div class="course-desc-cell">${esc(c.description)}</div>` : ''}
@@ -340,9 +362,72 @@
               ${c.capacity_female > 0 ? `<span style="color:#db2777">여 ${c.enrolled_female}/${c.capacity_female}</span>` : ''}
             </div>` : ''}
           </td>
-          <td class="action-cell">${btn}</td>
+          <td class="action-cell" onclick="event.stopPropagation()">${btn}</td>
         </tr>`;
       }).join('');
+    }
+
+    function showDetail(id) {
+      const c = courseList.find(x => x.id === id);
+      if (!c) return;
+
+      document.getElementById('detailName').textContent = c.name;
+
+      const descEl = document.getElementById('detailDesc');
+      if (c.description) { descEl.textContent = c.description; descEl.style.display = ''; }
+      else { descEl.style.display = 'none'; }
+
+      const rows = [];
+      if (c.instructor) rows.push(`<div style="display:flex;gap:.5rem"><span style="color:var(--text-muted);min-width:4.5rem;font-size:.88rem">담당교수</span><strong>${esc(c.instructor)}</strong></div>`);
+      const time = c.days && c.start_time ? `${esc(c.days)} ${esc(c.start_time)} ~ ${esc(c.end_time)}` : '';
+      if (time) rows.push(`<div style="display:flex;gap:.5rem"><span style="color:var(--text-muted);min-width:4.5rem;font-size:.88rem">강의시간</span><strong>${time}</strong></div>`);
+      if (c.schedule) rows.push(`<div style="display:flex;gap:.5rem"><span style="color:var(--text-muted);min-width:4.5rem;font-size:.88rem">강의실</span><strong>${esc(c.schedule)}</strong></div>`);
+      document.getElementById('detailMeta').innerHTML = rows.length ? rows.join('') : '<span style="color:var(--text-muted);font-size:.9rem">세부 정보 없음</span>';
+
+      const pct = Math.min(100, Math.round((c.enrolled_count / c.capacity) * 100));
+      const full = c.enrolled_count >= c.capacity || c.gender_full;
+      document.getElementById('detailCapText').textContent = `${c.enrolled_count} / ${c.capacity} 명`;
+      const fill = document.getElementById('detailCapFill');
+      fill.style.width = pct + '%';
+      fill.className = 'cap-fill' + (full ? ' full' : '');
+      const genderEl = document.getElementById('detailGenderCap');
+      genderEl.innerHTML = (c.capacity_male > 0 || c.capacity_female > 0)
+        ? `${c.capacity_male > 0 ? `<span style="color:#2563eb">남 ${c.enrolled_male}/${c.capacity_male}</span>` : ''}
+           ${c.capacity_female > 0 ? `<span style="color:#db2777">여 ${c.enrolled_female}/${c.capacity_female}</span>` : ''}` : '';
+
+      const enrolled = c.is_enrolled > 0;
+      document.getElementById('detailAction').innerHTML = enrolled
+        ? `<button class="btn btn-outline w-full" onclick="unenrollFromDetail(${c.id})">수강 취소</button>`
+        : !regOpen
+          ? `<button class="btn btn-ghost w-full" disabled>신청 불가</button>`
+          : full
+            ? `<button class="btn btn-ghost w-full" disabled>정원 마감</button>`
+            : `<button class="btn btn-primary w-full" onclick="enrollFromDetail(${c.id})">수강 신청</button>`;
+
+      document.getElementById('detailModal').classList.add('open');
+    }
+
+    function closeDetail() {
+      document.getElementById('detailModal').classList.remove('open');
+    }
+
+    async function enrollFromDetail(id) {
+      const res = await fetch(`/api/courses/${id}/enroll`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error, 'error'); return; }
+      showToast('수강 신청되었습니다!', 'success');
+      closeDetail();
+      loadCourses(); loadMyList();
+    }
+
+    async function unenrollFromDetail(id) {
+      if (!confirm('수강 신청을 취소하시겠습니까?')) return;
+      const res = await fetch(`/api/courses/${id}/enroll`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error, 'error'); return; }
+      showToast('수강이 취소되었습니다.', 'success');
+      closeDetail();
+      loadCourses(); loadMyList();
     }
 
     async function loadMyList() {
