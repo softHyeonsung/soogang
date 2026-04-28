@@ -47,13 +47,8 @@
       .admin-course-grid { grid-template-columns: 1fr; }
       .table-wrap { -webkit-overflow-scrolling: touch; }
       th, td { font-size: .82rem; padding: .6rem .75rem; }
-      /* 기간 설정: 모바일에서 꽉 채우고 overflow 방지 */
+      /* 기간 설정: 모바일에서 꽉 채우기 */
       #tabSettings > div { max-width: 100% !important; }
-      #tabSettings input[type="datetime-local"] {
-        font-size: 1rem;   /* iOS 줌 방지 */
-        width: 100%;
-        min-width: 0;
-      }
     }
   </style>
 </head>
@@ -110,11 +105,17 @@
           </div>
           <div class="form-group">
             <label>신청 시작</label>
-            <input type="datetime-local" id="regStart" style="width:100%;padding:.5rem .65rem;border:1.5px solid var(--border);border-radius:8px;font-size:.88rem;box-sizing:border-box">
+            <div style="display:flex;gap:.5rem">
+              <input type="date" id="regStartDate" style="flex:1;min-width:0;padding:.5rem .6rem;border:1.5px solid var(--border);border-radius:8px;font-size:1rem;box-sizing:border-box">
+              <input type="time" id="regStartTime" step="300" style="width:100px;flex-shrink:0;padding:.5rem .6rem;border:1.5px solid var(--border);border-radius:8px;font-size:1rem;box-sizing:border-box">
+            </div>
           </div>
           <div class="form-group">
             <label>신청 종료</label>
-            <input type="datetime-local" id="regEnd" style="width:100%;padding:.5rem .65rem;border:1.5px solid var(--border);border-radius:8px;font-size:.88rem;box-sizing:border-box">
+            <div style="display:flex;gap:.5rem">
+              <input type="date" id="regEndDate" style="flex:1;min-width:0;padding:.5rem .6rem;border:1.5px solid var(--border);border-radius:8px;font-size:1rem;box-sizing:border-box">
+              <input type="time" id="regEndTime" step="300" style="width:100px;flex-shrink:0;padding:.5rem .6rem;border:1.5px solid var(--border);border-radius:8px;font-size:1rem;box-sizing:border-box">
+            </div>
           </div>
           <button class="btn btn-primary" onclick="saveSettings()" style="width:100%;margin-top:.4rem;padding:.55rem">저장</button>
         </div>
@@ -404,8 +405,12 @@
       const res = await fetch('/api/settings/registration');
       const s = await res.json();
       document.getElementById('regEnabled').checked = s.enabled;
-      document.getElementById('regStart').value = s.start || '';
-      document.getElementById('regEnd').value   = s.end   || '';
+      const [startDate, startTime] = (s.start || 'T').split('T');
+      const [endDate,   endTime]   = (s.end   || 'T').split('T');
+      document.getElementById('regStartDate').value = startDate || '';
+      document.getElementById('regStartTime').value = startTime || '';
+      document.getElementById('regEndDate').value   = endDate   || '';
+      document.getElementById('regEndTime').value   = endTime   || '';
       document.getElementById('settingsError').style.display = 'none';
       renderRegStatusBanner(s);
     }
@@ -435,9 +440,13 @@
     }
 
     async function saveSettings() {
-      const enabled = document.getElementById('regEnabled').checked;
-      const start   = document.getElementById('regStart').value;
-      const end     = document.getElementById('regEnd').value;
+      const enabled   = document.getElementById('regEnabled').checked;
+      const startDate = document.getElementById('regStartDate').value;
+      const startTime = document.getElementById('regStartTime').value;
+      const endDate   = document.getElementById('regEndDate').value;
+      const endTime   = document.getElementById('regEndTime').value;
+      const start = startDate ? `${startDate}T${startTime || '00:00'}` : '';
+      const end   = endDate   ? `${endDate}T${endTime || '00:00'}`     : '';
       const errEl   = document.getElementById('settingsError');
       errEl.style.display = 'none';
 
