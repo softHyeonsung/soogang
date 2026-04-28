@@ -47,6 +47,13 @@
       .admin-course-grid { grid-template-columns: 1fr; }
       .table-wrap { -webkit-overflow-scrolling: touch; }
       th, td { font-size: .82rem; padding: .6rem .75rem; }
+      /* 기간 설정: 모바일에서 꽉 채우고 overflow 방지 */
+      #tabSettings > div { max-width: 100% !important; }
+      #tabSettings input[type="datetime-local"] {
+        font-size: 1rem;   /* iOS 줌 방지 */
+        width: 100%;
+        min-width: 0;
+      }
     }
   </style>
 </head>
