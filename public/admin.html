@@ -6,12 +6,45 @@
   <title>수강신청 - 관리자</title>
   <link rel="stylesheet" href="style.css">
   <style>
+    /* ── Admin course card grid ── */
+    .admin-course-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1rem;
+    }
+    .admin-course-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1.5px solid var(--border);
+      padding: 1.1rem 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: .55rem;
+      transition: box-shadow .2s, border-color .2s;
+    }
+    .admin-course-card:hover { box-shadow: var(--shadow-md); border-color: #c7d2fe; }
+    .admin-course-card.dragging { opacity: .35; }
+    .admin-course-card.drag-over { border-color: var(--primary); border-style: dashed; background: var(--primary-light); }
+    .acc-header { display: flex; align-items: flex-start; gap: .5rem; }
+    .acc-drag { cursor: grab; color: var(--text-muted); font-size: 1.1rem; user-select: none; padding-top: .1rem; flex-shrink: 0; }
+    .acc-drag:active { cursor: grabbing; }
+    .acc-name { font-size: 1rem; font-weight: 700; flex: 1; line-height: 1.4; }
+    .acc-desc { font-size: .82rem; color: #475569; line-height: 1.55; }
+    .acc-meta { display: flex; flex-direction: column; gap: .25rem; font-size: .82rem; color: var(--text-muted); }
+    .acc-meta span { display: flex; align-items: center; gap: .3rem; }
+    .acc-cap-bar { height: 5px; background: var(--border); border-radius: 99px; }
+    .acc-cap-fill { height: 100%; border-radius: 99px; background: var(--primary); transition: width .3s; }
+    .acc-cap-fill.full { background: var(--danger); }
+    .acc-cap-row { display: flex; justify-content: space-between; align-items: center; margin-top: .3rem; font-size: .81rem; }
+    .acc-actions { display: flex; gap: .4rem; margin-top: .1rem; flex-wrap: wrap; }
+
     @media (max-width: 640px) {
       .main-content { padding: .75rem; }
       .page-header { margin-bottom: 1rem; }
       .page-header h2 { font-size: 1.2rem; }
       .modal { max-height: 90vh; overflow-y: auto; }
-      /* 테이블은 가로 스크롤 유지 */
+      .admin-course-grid { grid-template-columns: 1fr; }
       .table-wrap { -webkit-overflow-scrolling: touch; }
       th, td { font-size: .82rem; padding: .6rem .75rem; }
     }
@@ -209,52 +242,45 @@
         return;
       }
 
-      el.innerHTML = `<div class="table-wrap"><table>
-        <thead><tr>
-          <th style="width:4%" title="드래그하여 순서 변경"></th>
-          <th style="width:26%">강좌명</th>
-          <th style="width:12%">담당교수</th>
-          <th style="width:15%">강의시간</th>
-          <th style="width:17%">수강인원</th>
-          <th style="width:10%">신청자</th>
-          <th style="width:16%">관리</th>
-        </tr></thead>
-        <tbody>${courses.map(c => {
+      el.innerHTML = `<div class="admin-course-grid">${courses.map(c => {
           const pct = Math.min(100, Math.round((c.enrolled_count / c.capacity) * 100));
           const full = c.enrolled_count >= c.capacity;
-          return `<tr data-id="${c.id}">
-            <td class="drag-handle" title="드래그하여 순서 변경">⠿</td>
-            <td class="wrap">
-              <div style="font-size:1rem;font-weight:700">${esc(c.name)}</div>
-              ${c.description ? `<div style="font-size:.85rem;color:var(--text-muted);margin-top:.15rem">${esc(c.description.substring(0,50))}${c.description.length>50?'…':''}</div>` : ''}
-            </td>
-            <td style="font-size:1rem">${esc(c.instructor || '-')}</td>
-            <td style="font-size:1rem">${c.days && c.start_time ? `${esc(c.days)} ${esc(c.start_time)}~${esc(c.end_time)}` : esc(c.schedule || '-')}</td>
-            <td>
-              <div style="height:6px;background:var(--border);border-radius:99px;margin-bottom:.3rem">
-                <div style="height:100%;width:${pct}%;border-radius:99px;background:${full ? 'var(--danger)' : 'var(--primary)'}"></div>
+          const timeStr = c.days && c.start_time
+            ? `${esc(c.days)} ${esc(c.start_time)}~${esc(c.end_time)}`
+            : '';
+          return `<div class="admin-course-card" draggable="true" data-id="${c.id}">
+            <div class="acc-header">
+              <span class="acc-drag" title="드래그하여 순서 변경">⠿</span>
+              <span class="acc-name">${esc(c.name)}</span>
+            </div>
+            ${c.description ? `<div class="acc-desc">${esc(c.description)}</div>` : ''}
+            <div class="acc-meta">
+              ${c.instructor ? `<span>👤 ${esc(c.instructor)}</span>` : ''}
+              ${timeStr ? `<span>🕐 ${timeStr}</span>` : ''}
+              ${c.schedule ? `<span>📍 ${esc(c.schedule)}</span>` : ''}
+            </div>
+            <div>
+              <div class="acc-cap-bar">
+                <div class="acc-cap-fill${full ? ' full' : ''}" style="width:${pct}%"></div>
               </div>
-              <span style="font-size:.9rem;color:var(--text-muted)">${c.enrolled_count} / ${c.capacity} 명</span>
-              ${(c.capacity_male > 0 || c.capacity_female > 0) ? `
-              <div style="font-size:.82rem;margin-top:.25rem;display:flex;gap:.5rem;flex-wrap:wrap">
-                ${c.capacity_male > 0 ? `<span style="color:#2563eb">남 ${c.enrolled_male}/${c.capacity_male}</span>` : ''}
-                ${c.capacity_female > 0 ? `<span style="color:#db2777">여 ${c.enrolled_female}/${c.capacity_female}</span>` : ''}
-              </div>` : ''}
-            </td>
-            <td>
+              <div class="acc-cap-row">
+                <span style="color:var(--text-muted)">${c.enrolled_count} / ${c.capacity}명</span>
+                ${(c.capacity_male > 0 || c.capacity_female > 0) ? `
+                <div style="display:flex;gap:.5rem">
+                  ${c.capacity_male > 0 ? `<span style="color:#2563eb">남 ${c.enrolled_male}/${c.capacity_male}</span>` : ''}
+                  ${c.capacity_female > 0 ? `<span style="color:#db2777">여 ${c.enrolled_female}/${c.capacity_female}</span>` : ''}
+                </div>` : ''}
+              </div>
+            </div>
+            <div class="acc-actions">
               <button class="btn btn-outline btn-sm js-show-enrollments" data-id="${c.id}" data-name="${esc(c.name)}">${c.enrolled_count}명 보기</button>
-            </td>
-            <td>
-              <div class="flex gap-2">
-                <button class="btn btn-warning btn-sm js-edit-course" data-id="${c.id}">수정</button>
-                <button class="btn btn-danger btn-sm js-delete-course" data-id="${c.id}" data-name="${esc(c.name)}">삭제</button>
-              </div>
-            </td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table></div>`;
+              <button class="btn btn-warning btn-sm js-edit-course" data-id="${c.id}">수정</button>
+              <button class="btn btn-danger btn-sm js-delete-course" data-id="${c.id}" data-name="${esc(c.name)}">삭제</button>
+            </div>
+          </div>`;
+        }).join('')}</div>`;
 
-      attachDragHandlers(el.querySelector('tbody'));
+      attachDragHandlers(el.querySelector('.admin-course-grid'));
     }
 
     function openCourseModal(course = null) {
@@ -481,51 +507,49 @@
     // ── Drag & Drop ───────────────────────────────────────────────────────────
     let dragSrcRow = null;
 
-    function attachDragHandlers(tbody) {
-      tbody.querySelectorAll('tr').forEach(row => {
-        row.setAttribute('draggable', 'true');
-
-        row.addEventListener('dragstart', e => {
-          dragSrcRow = row;
+    function attachDragHandlers(grid) {
+      grid.querySelectorAll('.admin-course-card').forEach(card => {
+        card.addEventListener('dragstart', e => {
+          dragSrcRow = card;
           e.dataTransfer.effectAllowed = 'move';
-          setTimeout(() => row.classList.add('dragging'), 0);
+          setTimeout(() => card.classList.add('dragging'), 0);
         });
 
-        row.addEventListener('dragend', () => {
-          row.classList.remove('dragging');
-          tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+        card.addEventListener('dragend', () => {
+          card.classList.remove('dragging');
+          grid.querySelectorAll('.admin-course-card').forEach(c => c.classList.remove('drag-over'));
           dragSrcRow = null;
         });
 
-        row.addEventListener('dragover', e => {
+        card.addEventListener('dragover', e => {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
-          if (dragSrcRow && dragSrcRow !== row) {
-            tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
-            row.classList.add('drag-over');
+          if (dragSrcRow && dragSrcRow !== card) {
+            grid.querySelectorAll('.admin-course-card').forEach(c => c.classList.remove('drag-over'));
+            card.classList.add('drag-over');
           }
         });
 
-        row.addEventListener('dragleave', e => {
-          if (!row.contains(e.relatedTarget)) row.classList.remove('drag-over');
+        card.addEventListener('dragleave', e => {
+          if (!card.contains(e.relatedTarget)) card.classList.remove('drag-over');
         });
 
-        row.addEventListener('drop', e => {
+        card.addEventListener('drop', e => {
           e.preventDefault();
           e.stopPropagation();
-          if (!dragSrcRow || dragSrcRow === row) return;
-          row.classList.remove('drag-over');
+          if (!dragSrcRow || dragSrcRow === card) return;
+          card.classList.remove('drag-over');
 
-          const rows = [...tbody.querySelectorAll('tr')];
-          const srcIdx = rows.indexOf(dragSrcRow);
-          const dstIdx = rows.indexOf(row);
+          const cards = [...grid.querySelectorAll('.admin-course-card')];
+          const srcIdx = cards.indexOf(dragSrcRow);
+          const dstIdx = cards.indexOf(card);
           if (srcIdx < dstIdx) {
-            tbody.insertBefore(dragSrcRow, row.nextSibling);
+            grid.insertBefore(dragSrcRow, card.nextSibling);
           } else {
-            tbody.insertBefore(dragSrcRow, row);
+            grid.insertBefore(dragSrcRow, card);
           }
 
-          const ids = [...tbody.querySelectorAll('tr')].map(r => r.dataset.id);
+          const ids = [...grid.querySelectorAll('.admin-course-card')].map(c => c.dataset.id);
           saveOrder(ids);
         });
       });
