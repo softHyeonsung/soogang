@@ -89,27 +89,27 @@
 
     <!-- Settings Tab -->
     <div id="tabSettings" style="display:none">
-      <div style="max-width:480px">
-        <div id="regStatusBanner" style="display:none;padding:.75rem 1rem;border-radius:8px;margin-bottom:1.25rem;font-size:.95rem;font-weight:600"></div>
-        <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);padding:1.5rem">
-          <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:1.25rem">수강신청 기간 설정</h3>
+      <div style="max-width:360px;margin:0 auto">
+        <div id="regStatusBanner" style="display:none;padding:.65rem .9rem;border-radius:8px;margin-bottom:1rem;font-size:.88rem;font-weight:600"></div>
+        <div style="background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);padding:1.25rem">
+          <h3 style="font-size:.95rem;font-weight:700;margin-bottom:1rem">수강신청 기간 설정</h3>
           <div id="settingsError" class="error-msg"></div>
           <div class="form-group">
             <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;width:fit-content">
-              <input type="checkbox" id="regEnabled" style="width:16px;height:16px;accent-color:var(--primary)">
-              <span style="font-weight:600">기간 제한 활성화</span>
+              <input type="checkbox" id="regEnabled" style="width:15px;height:15px;accent-color:var(--primary)">
+              <span style="font-weight:600;font-size:.88rem">기간 제한 활성화</span>
             </label>
-            <div class="hint" style="margin-top:.4rem">활성화하면 아래 기간 외에는 수강신청이 불가합니다.</div>
+            <div class="hint" style="margin-top:.35rem">활성화하면 아래 기간 외에는 수강신청이 불가합니다.</div>
           </div>
           <div class="form-group">
             <label>신청 시작</label>
-            <input type="datetime-local" id="regStart" style="width:100%;padding:.6rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem;box-sizing:border-box">
+            <input type="datetime-local" id="regStart" style="width:100%;padding:.5rem .65rem;border:1.5px solid var(--border);border-radius:8px;font-size:.88rem;box-sizing:border-box">
           </div>
           <div class="form-group">
             <label>신청 종료</label>
-            <input type="datetime-local" id="regEnd" style="width:100%;padding:.6rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem;box-sizing:border-box">
+            <input type="datetime-local" id="regEnd" style="width:100%;padding:.5rem .65rem;border:1.5px solid var(--border);border-radius:8px;font-size:.88rem;box-sizing:border-box">
           </div>
-          <button class="btn btn-primary" onclick="saveSettings()" style="width:100%;margin-top:.5rem">저장</button>
+          <button class="btn btn-primary" onclick="saveSettings()" style="width:100%;margin-top:.4rem;padding:.55rem">저장</button>
         </div>
       </div>
     </div>
