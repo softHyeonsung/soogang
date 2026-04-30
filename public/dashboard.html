@@ -443,14 +443,16 @@
 
       el.innerHTML = `<table>
         <thead><tr>
-          <th style="width:35%">강좌명</th>
-          <th style="width:20%">담당교수</th>
-          <th style="width:25%">강의시간</th>
+          <th style="width:30%">강좌명</th>
+          <th style="width:15%">담당교수</th>
+          <th style="width:20%">강의시간</th>
+          <th style="width:15%">장소</th>
           <th style="width:20%">신청일</th>
         </tr></thead>
         <tbody>${list.map(c => `<tr>
           <td><strong>${esc(c.name)}</strong></td>
           <td>${esc(c.instructor || '-')}</td>
+          <td>${c.days && c.start_time ? `${esc(c.days)} ${esc(c.start_time)}~${esc(c.end_time)}` : '-'}</td>
           <td>${esc(c.schedule || '-')}</td>
           <td>${fmtDate(c.enrolled_at)}</td>
         </tr>`).join('')}</tbody>

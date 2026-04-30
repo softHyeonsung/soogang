@@ -234,7 +234,7 @@ app.delete('/api/courses/:id/enroll', requireAuth, (req, res) => {
 
 app.get('/api/my-enrollments', requireAuth, (req, res) => {
   const enrollments = db.prepare(`
-    SELECT c.id, c.name, c.instructor, c.schedule, e.enrolled_at
+    SELECT c.id, c.name, c.instructor, c.schedule, c.days, c.start_time, c.end_time, e.enrolled_at
     FROM enrollments e JOIN courses c ON e.course_id = c.id
     WHERE e.user_id = ? ORDER BY e.enrolled_at DESC
   `).all(req.session.userId);
