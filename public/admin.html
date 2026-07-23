@@ -213,6 +213,17 @@
     </div>
   </div>
 
+  <!-- User Courses Modal -->
+  <div class="modal-overlay" id="userCoursesModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="userCoursesModalTitle">신청한 강좌</h3>
+        <button class="modal-close" onclick="closeModal('userCoursesModal')">×</button>
+      </div>
+      <div id="userCoursesList"></div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
@@ -400,6 +411,29 @@
       </table></div>`;
     }
 
+    async function showUserCourses(userId, userName) {
+      document.getElementById('userCoursesModalTitle').textContent = `"${userName}"님이 신청한 강좌`;
+      const el = document.getElementById('userCoursesList');
+      el.innerHTML = '<p style="text-align:center;padding:1rem;color:var(--text-muted)">불러오는 중...</p>';
+      openModal('userCoursesModal');
+
+      const res = await fetch(`/api/admin/users/${userId}/enrollments`);
+      const courses = await res.json();
+
+      if (!courses.length) {
+        el.innerHTML = '<div class="empty"><div class="empty-icon">📚</div><p>신청한 강좌가 없습니다.</p></div>';
+        return;
+      }
+      el.innerHTML = `<div class="table-wrap"><table>
+        <thead><tr><th>강좌명</th><th>시간</th><th>신청일</th></tr></thead>
+        <tbody>${courses.map(c => `<tr>
+          <td><strong>${esc(c.name)}</strong></td>
+          <td>${c.days && c.start_time ? esc(c.days) + ' ' + esc(c.start_time) + '~' + esc(c.end_time) : '-'}</td>
+          <td>${fmtDate(c.enrolled_at)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+    }
+
     // ── Settings ─────────────────────────────────────────────────────────────
     async function loadSettings() {
       const res = await fetch('/api/settings/registration');
@@ -487,7 +521,7 @@
           <td style="font-size:1rem;font-weight:600">${esc(u.name)}</td>
           <td style="font-size:1rem">${esc(u.gender || '-')}</td>
           <td><span class="tag ${u.role === 'admin' ? 'tag-admin' : 'tag-user'}">${u.role === 'admin' ? '관리자' : '학생'}</span></td>
-          <td style="font-size:1rem">${u.enrollment_count}개</td>
+          <td><button class="btn btn-sm js-show-user-courses" data-id="${u.id}" data-name="${esc(u.name)}">${u.enrollment_count}개</button></td>
           <td style="font-size:.9rem;color:var(--text-muted)">${fmtDate(u.created_at)}</td>
           <td>
             <div class="flex gap-2">
@@ -616,6 +650,8 @@
         deleteCourse(btn.dataset.id, btn.dataset.name);
       } else if (btn.classList.contains('js-delete-user')) {
         deleteUser(btn.dataset.id, btn.dataset.name);
+      } else if (btn.classList.contains('js-show-user-courses')) {
+        showUserCourses(btn.dataset.id, btn.dataset.name);
       }
     });
 

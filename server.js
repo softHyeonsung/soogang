@@ -355,6 +355,15 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
   res.json(users);
 });
 
+app.get('/api/admin/users/:id/enrollments', requireAdmin, (req, res) => {
+  const enrollments = db.prepare(`
+    SELECT c.id, c.name, c.instructor, c.schedule, c.days, c.start_time, c.end_time, e.enrolled_at
+    FROM enrollments e JOIN courses c ON e.course_id = c.id
+    WHERE e.user_id = ? ORDER BY e.enrolled_at DESC
+  `).all(req.params.id);
+  res.json(enrollments);
+});
+
 app.put('/api/admin/users/:id/role', requireAdmin, (req, res) => {
   const { role } = req.body;
   if (!['user', 'admin'].includes(role)) return res.status(400).json({ error: '잘못된 역할입니다.' });
@@ -373,6 +382,12 @@ app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
   });
   deleteUser(req.params.id);
   res.json({ success: true });
+});
+
+// ── Admin: DB download ────────────────────────────────────────────────────────
+app.get('/api/admin/download-db', requireAdmin, (req, res) => {
+  const dbPath = process.env.DB_PATH || path.join(__dirname, 'courses.db');
+  res.download(dbPath, 'courses.db');
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
