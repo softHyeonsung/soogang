@@ -414,7 +414,11 @@
     async function enrollFromDetail(id) {
       const res = await fetch(`/api/courses/${id}/enroll`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) { showToast(data.error, 'error'); return; }
+      if (!res.ok) {
+        showToast(data.error, 'error');
+        if (data.error?.includes('정원')) { loadCourses(); loadMyList(); }
+        return;
+      }
       showToast('수강 신청되었습니다!', 'success');
       closeDetail();
       loadCourses(); loadMyList();
@@ -468,7 +472,11 @@
     async function enroll(id) {
       const res = await fetch(`/api/courses/${id}/enroll`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) { showToast(data.error, 'error'); return; }
+      if (!res.ok) {
+        showToast(data.error, 'error');
+        if (data.error?.includes('정원')) { loadCourses(); loadMyList(); }
+        return;
+      }
       showToast('수강 신청되었습니다!', 'success');
       loadCourses(); loadMyList();
     }
