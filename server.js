@@ -109,6 +109,12 @@ function setSetting(key, value) {
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
 }
 
+// datetime-local values (e.g. "2026-07-31T15:45") have no timezone — the admin
+// enters them as Korea time, so parse them as KST regardless of server TZ.
+function parseKST(str) {
+  return str ? new Date(str + '+09:00') : null;
+}
+
 app.get('/api/settings/registration', (req, res) => {
   res.json({
     enabled: getSetting('reg_enabled') === 'true',
@@ -119,7 +125,7 @@ app.get('/api/settings/registration', (req, res) => {
 
 app.put('/api/admin/settings/registration', requireAdmin, (req, res) => {
   const { enabled, start, end } = req.body;
-  if (enabled && start && end && new Date(start) >= new Date(end))
+  if (enabled && start && end && parseKST(start) >= parseKST(end))
     return res.status(400).json({ error: '종료 시간은 시작 시간보다 늦어야 합니다.' });
   db.transaction(() => {
     setSetting('reg_enabled', enabled ? 'true' : 'false');
@@ -170,8 +176,8 @@ app.post('/api/courses/:id/enroll', requireAuth, (req, res) => {
     const start = getSetting('reg_start');
     const end   = getSetting('reg_end');
     const now   = new Date();
-    if (start && now < new Date(start)) return res.status(400).json({ error: '아직 수강신청 기간이 시작되지 않았습니다.' });
-    if (end   && now > new Date(end))   return res.status(400).json({ error: '수강신청 기간이 종료되었습니다.' });
+    if (start && now < parseKST(start)) return res.status(400).json({ error: '아직 수강신청 기간이 시작되지 않았습니다.' });
+    if (end   && now > parseKST(end))   return res.status(400).json({ error: '수강신청 기간이 종료되었습니다.' });
   }
 
   // Use a transaction to prevent race conditions on capacity check
