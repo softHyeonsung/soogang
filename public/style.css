@@ -148,6 +148,7 @@ tr:hover td { background: #fafafa; }
 .modal {
   background: var(--surface); border-radius: var(--radius);
   padding: 1.75rem; width: 100%; max-width: 480px;
+  max-height: 90vh; overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0,0,0,.2); transform: translateY(-10px); transition: transform .2s;
 }
 .modal-overlay.open .modal { transform: translateY(0); }
